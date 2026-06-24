@@ -14,12 +14,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build
-        run: make build-linux-amd64
+        run: make build-linux-amd64 && make build-cli-all
 
       - uses: actions/upload-artifact@v4
         with:
           name: linux-amd64
-          path: bin/*linux-amd64*
+          path: bin/
 
   linux-arm64:
     runs-on: ubuntu-24.04-arm
