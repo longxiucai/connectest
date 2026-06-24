@@ -21,7 +21,7 @@ $(BUILD_DIR):
 all: build-all build-cli-all
 
 # ====================== 依赖安装 ======================
-# 系统依赖（amd64 + arm64交叉gcc，适配CGO GUI编译）
+# 系统依赖
 install-deps:
 	sudo apt install -y gcc gcc-aarch64-linux-gnu \
 		libxi-dev libxcursor-dev libxinerama-dev \
