@@ -33,17 +33,17 @@ deps: install-deps
 # ====================== GUI主程序构建（CGO启用，图形界面） ======================
 # 当前本机编译
 build: deps $(BUILD_DIR)
-	go build -o $(MAIN_BIN) ./cmd/connectest
+	go build -ldflags "-X github.com/longxiucai/connectest/internal/gui.Version=$(VERSION)" -o $(MAIN_BIN) ./cmd/connectest
 
 # Linux amd64
 build-linux-amd64: deps $(BUILD_DIR)
 	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 \
-	go build -o $(BUILD_DIR)/$(APP_NAME)-$(VERSION)-linux-amd64 ./cmd/connectest
+	go build -ldflags "-X github.com/longxiucai/connectest/internal/gui.Version=$(VERSION)" -o $(BUILD_DIR)/$(APP_NAME)-$(VERSION)-linux-amd64 ./cmd/connectest
 
 # Linux arm64
 build-linux-arm64: deps $(BUILD_DIR)
 	CGO_ENABLED=1 GOOS=linux GOARCH=arm64 \
-	go build -o $(BUILD_DIR)/$(APP_NAME)-$(VERSION)-linux-arm64 ./cmd/connectest
+	go build -ldflags "-X github.com/longxiucai/connectest/internal/gui.Version=$(VERSION)" -o $(BUILD_DIR)/$(APP_NAME)-$(VERSION)-linux-arm64 ./cmd/connectest
 
 # GUI全平台打包
 build-all: build-linux-amd64 build-linux-arm64
@@ -51,27 +51,27 @@ build-all: build-linux-amd64 build-linux-arm64
 # ====================== CLI工具交叉编译（纯静态 CGO=0，无系统依赖） ======================
 build-cli-linux-amd64: $(BUILD_DIR)
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-	go build -o $(BUILD_DIR)/$(APP_NAME)-cli-$(VERSION)-linux-amd64 ./cmd/connectest-cli
+	go build -ldflags "-X github.com/longxiucai/connectest/internal/cli.Version=$(VERSION)" -o $(BUILD_DIR)/$(APP_NAME)-cli-$(VERSION)-linux-amd64 ./cmd/connectest-cli
 
 build-cli-linux-arm64: $(BUILD_DIR)
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
-	go build -o $(BUILD_DIR)/$(APP_NAME)-cli-$(VERSION)-linux-arm64 ./cmd/connectest-cli
+	go build -ldflags "-X github.com/longxiucai/connectest/internal/cli.Version=$(VERSION)" -o $(BUILD_DIR)/$(APP_NAME)-cli-$(VERSION)-linux-arm64 ./cmd/connectest-cli
 
 build-cli-darwin-amd64: $(BUILD_DIR)
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 \
-	go build -o $(BUILD_DIR)/$(APP_NAME)-cli-$(VERSION)-darwin-amd64 ./cmd/connectest-cli
+	go build -ldflags "-X github.com/longxiucai/connectest/internal/cli.Version=$(VERSION)" -o $(BUILD_DIR)/$(APP_NAME)-cli-$(VERSION)-darwin-amd64 ./cmd/connectest-cli
 
 build-cli-darwin-arm64: $(BUILD_DIR)
 	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 \
-	go build -o $(BUILD_DIR)/$(APP_NAME)-cli-$(VERSION)-darwin-arm64 ./cmd/connectest-cli
+	go build -ldflags "-X github.com/longxiucai/connectest/internal/cli.Version=$(VERSION)" -o $(BUILD_DIR)/$(APP_NAME)-cli-$(VERSION)-darwin-arm64 ./cmd/connectest-cli
 
 build-cli-windows-amd64: $(BUILD_DIR)
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
-	go build -o $(BUILD_DIR)/$(APP_NAME)-cli-$(VERSION)-windows-amd64.exe ./cmd/connectest-cli
+	go build -ldflags "-X github.com/longxiucai/connectest/internal/cli.Version=$(VERSION)" -o $(BUILD_DIR)/$(APP_NAME)-cli-$(VERSION)-windows-amd64.exe ./cmd/connectest-cli
 
 build-cli-windows-arm64: $(BUILD_DIR)
 	CGO_ENABLED=0 GOOS=windows GOARCH=arm64 \
-	go build -o $(BUILD_DIR)/$(APP_NAME)-cli-$(VERSION)-windows-arm64.exe ./cmd/connectest-cli
+	go build -ldflags "-X github.com/longxiucai/connectest/internal/cli.Version=$(VERSION)" -o $(BUILD_DIR)/$(APP_NAME)-cli-$(VERSION)-windows-arm64.exe ./cmd/connectest-cli
 
 # CLI 全部平台一键编译
 build-cli-all: \
