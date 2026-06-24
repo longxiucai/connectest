@@ -1,0 +1,43 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  linux-amd64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: make build-cli-linux-amd64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-amd64
+          path: bin/*linux-amd64*
+
+  linux-arm64:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: make build-cli-linux-arm64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-arm64
+          path: bin/*linux-arm64*
+
+  release:
+    needs: [linux-amd64, linux-arm64]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/download-artifact@v4
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: "**/*"
