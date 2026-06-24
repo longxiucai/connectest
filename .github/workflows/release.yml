@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v*"
+
 permissions:
   contents: write
 jobs:
@@ -12,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build
-        run: make build-cli-linux-amd64
+        run: make build-linux-amd64
 
       - uses: actions/upload-artifact@v4
         with:
@@ -24,7 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build
-        run: make build-cli-linux-arm64
+        run: make build-linux-arm64
 
       - uses: actions/upload-artifact@v4
         with:
