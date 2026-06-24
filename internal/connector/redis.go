@@ -3,6 +3,7 @@ package connector
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
@@ -32,13 +33,15 @@ func (c *RedisConnector) TestConnection(ctx context.Context, cfg config.Config) 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	redisLog.Debug("连接 %s:%d", cfg.Host, cfg.Port)
+	redisLog.Info("开始测试连接 %s:%d", cfg.Host, cfg.Port)
 	client := c.newClient(cfg)
 	defer client.Close()
 
 	if err := client.Ping(ctx).Err(); err != nil {
+		redisLog.Error("Ping 失败: %v", err)
 		return &config.Result{Success: false, Message: fmt.Sprintf("连接失败: %v", err)}, nil
 	}
+	redisLog.Info("Ping 成功，开始获取服务器信息")
 
 	si := &config.ServerInfo{Status: "Running"}
 
@@ -60,6 +63,7 @@ func (c *RedisConnector) TestConnection(ctx context.Context, cfg config.Config) 
 
 	serverInfo := parseInfo("server")
 	si.Version = serverInfo["redis_version"]
+	redisLog.Info("Redis 版本: %s, 模式: %s", si.Version, serverInfo["redis_mode"])
 	if mode, ok := serverInfo["redis_mode"]; ok {
 		si.InfoItems = append(si.InfoItems, config.InfoItem{Label: "运行模式", Value: mode})
 	}
@@ -95,6 +99,7 @@ func (c *RedisConnector) TestConnection(ctx context.Context, cfg config.Config) 
 	// keyspace
 	ksInfo := parseInfo("keyspace")
 	if len(ksInfo) > 0 {
+		redisLog.Info("Keyspace 信息: %d 个数据库", len(ksInfo))
 		var dbs []string
 		for db, info := range ksInfo {
 			dbs = append(dbs, fmt.Sprintf("%s(%s)", db, info))
@@ -104,6 +109,7 @@ func (c *RedisConnector) TestConnection(ctx context.Context, cfg config.Config) 
 
 	replInfo := parseInfo("replication")
 	role := replInfo["role"]
+	redisLog.Info("角色: %s", role)
 	if serverInfo["redis_mode"] != "cluster" &&
 		serverInfo["redis_mode"] != "sentinel" {
 		if role == "master" {
@@ -166,6 +172,7 @@ func (c *RedisConnector) TestConnection(ctx context.Context, cfg config.Config) 
 
 	// Sentinel 检测
 	if sentinelInfo, ok := serverInfo["redis_mode"]; ok && sentinelInfo == "sentinel" {
+		redisLog.Info("检测到 Sentinel 模式")
 		si.Cluster = &config.ClusterInfo{Mode: "Sentinel"}
 		// 获取监控的主节点列表
 		mastersResult, err := client.Do(ctx, "SENTINEL", "MASTERS").Result()
@@ -322,6 +329,7 @@ func (c *RedisConnector) TestConnection(ctx context.Context, cfg config.Config) 
 
 	// Redis Cluster
 	if clusterInfo, ok := serverInfo["redis_mode"]; ok && clusterInfo == "cluster" {
+		redisLog.Info("检测到 Redis Cluster 模式")
 		clusterInfoRaw, _ := client.ClusterInfo(ctx).Result()
 		clusterInfoMap := make(map[string]string)
 		for _, line := range strings.Split(clusterInfoRaw, "\n") {
@@ -350,6 +358,7 @@ func (c *RedisConnector) TestConnection(ctx context.Context, cfg config.Config) 
 
 		nodesRaw, _ := client.ClusterNodes(ctx).Result()
 		if nodesRaw != "" {
+			redisLog.Info("Cluster 节点信息获取成功")
 			for _, line := range strings.Split(nodesRaw, "\n") {
 				line = strings.TrimSpace(line)
 				if line == "" {
@@ -440,6 +449,7 @@ func (c *RedisConnector) TestConnection(ctx context.Context, cfg config.Config) 
 	if si.Version != "" {
 		msg = fmt.Sprintf("连接成功 - Redis %s", si.Version)
 	}
+	redisLog.Info("连接测试完成: %s", msg)
 
 	return &config.Result{
 		Success:    true,
@@ -479,6 +489,49 @@ func (c *RedisConnector) SupportedActions() []config.Action {
 				{Name: "section", Label: "信息段", Placeholder: "all", Required: false, Default: "server"},
 			},
 		},
+		{
+			Name:        "command",
+			Label:       "执行命令",
+			Description: "执行任意 Redis 命令，如 cluster nodes、dbsize、client list 等",
+			Params: []config.ActionParam{
+				{Name: "command", Label: "命令", Placeholder: "cluster nodes", Required: true, Default: "ping"},
+			},
+		},
+	}
+}
+
+func formatRedisValue(val any) string {
+	if val == nil {
+		return "(nil)"
+	}
+	switch v := val.(type) {
+	case string:
+		if v == "" {
+			return "(empty string)"
+		}
+		return v
+	case int64:
+		return fmt.Sprintf("(integer) %d", v)
+	case []byte:
+		if len(v) == 0 {
+			return "(empty bulk string)"
+		}
+		return string(v)
+	case []any:
+		if len(v) == 0 {
+			return "(empty array)"
+		}
+		var lines []string
+		for i, item := range v {
+			lines = append(lines, fmt.Sprintf("%d) %s", i+1, formatRedisValue(item)))
+		}
+		return strings.Join(lines, "\n")
+	default:
+		rv := reflect.ValueOf(val)
+		if rv.Kind() == reflect.Slice {
+			return fmt.Sprintf("%v", val)
+		}
+		return fmt.Sprintf("%v", val)
 	}
 }
 
@@ -486,11 +539,14 @@ func (c *RedisConnector) ExecuteAction(ctx context.Context, cfg config.Config, a
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
+	redisLog.Info("执行操作: %s, 参数: %v", action, params)
+
 	client := c.newClient(cfg)
 	defer client.Close()
 
 	switch action {
 	case "message_test":
+		redisLog.Debug("执行 SET/GET 测试")
 		doSet := params["do_set"] == "true"
 		doGet := params["do_get"] == "true"
 		setKey := params["set_key"]
@@ -519,7 +575,9 @@ func (c *RedisConnector) ExecuteAction(ctx context.Context, cfg config.Config, a
 						ttl = time.Duration(ttlSec) * time.Second
 					}
 				}
+				redisLog.Debug("SET %s = %s (TTL: %s)", setKey, setValue, ttl)
 				if err := client.Set(ctx, setKey, setValue, ttl).Err(); err != nil {
+					redisLog.Error("SET 失败: %v", err)
 					output.WriteString(fmt.Sprintf("❌ 设置失败: %v\n", err))
 				} else {
 					output.WriteString(fmt.Sprintf("✅ 设置成功 → 键: %s, 值: %s, TTL: %s\n", setKey, setValue, ttl))
@@ -532,8 +590,10 @@ func (c *RedisConnector) ExecuteAction(ctx context.Context, cfg config.Config, a
 			if getKey == "" {
 				output.WriteString("❌ 读取键名不能为空\n")
 			} else {
+				redisLog.Debug("GET %s", getKey)
 				got, err := client.Get(ctx, getKey).Result()
 				if err != nil {
+					redisLog.Error("GET 失败: %v", err)
 					output.WriteString(fmt.Sprintf("❌ 读取失败: %v\n", err))
 				} else {
 					output.WriteString(fmt.Sprintf("✅ 读取成功 ← 键: %s, 值: %s\n", getKey, got))
@@ -559,10 +619,13 @@ func (c *RedisConnector) ExecuteAction(ctx context.Context, cfg config.Config, a
 			pattern = "*"
 		}
 
+		redisLog.Info("执行 KEYS %s", pattern)
 		keys, err := client.Keys(ctx, pattern).Result()
 		if err != nil {
+			redisLog.Error("KEYS 失败: %v", err)
 			return &config.Result{Success: false, Message: fmt.Sprintf("KEYS 失败: %v", err)}, nil
 		}
+		redisLog.Info("KEYS 返回 %d 个键", len(keys))
 
 		return &config.Result{
 			Success: true,
@@ -576,8 +639,10 @@ func (c *RedisConnector) ExecuteAction(ctx context.Context, cfg config.Config, a
 			section = "server"
 		}
 
+		redisLog.Info("执行 INFO %s", section)
 		info, err := client.Info(ctx, section).Result()
 		if err != nil {
+			redisLog.Error("INFO 失败: %v", err)
 			return &config.Result{Success: false, Message: fmt.Sprintf("INFO 失败: %v", err)}, nil
 		}
 
@@ -585,6 +650,40 @@ func (c *RedisConnector) ExecuteAction(ctx context.Context, cfg config.Config, a
 			Success: true,
 			Message: "获取服务器信息成功",
 			Details: info,
+		}, nil
+
+	case "command":
+		cmdStr := strings.TrimSpace(params["command"])
+		if cmdStr == "" {
+			return &config.Result{Success: false, Message: "命令不能为空"}, nil
+		}
+
+		parts := strings.Fields(cmdStr)
+		parts[0] = strings.ToUpper(parts[0])
+		allArgs := make([]any, len(parts))
+		for i, a := range parts {
+			allArgs[i] = a
+		}
+
+		redisLog.Info("执行自定义命令: %s", cmdStr)
+		cmd := client.Do(ctx, allArgs...)
+		if cmd.Err() != nil {
+			redisLog.Error("命令 %s 执行失败: %v", cmdStr, cmd.Err())
+			return &config.Result{
+				Success: false,
+				Message: fmt.Sprintf("命令执行失败: %v", cmd.Err()),
+				Details: fmt.Sprintf("CMD: %s\nERROR: %v", cmdStr, cmd.Err()),
+			}, nil
+		}
+
+		val := cmd.Val()
+		detail := formatRedisValue(val)
+		redisLog.Info("命令 %s 执行成功", cmdStr)
+
+		return &config.Result{
+			Success: true,
+			Message: fmt.Sprintf("命令 %s 执行成功", cmdStr),
+			Details: detail,
 		}, nil
 
 	default:
