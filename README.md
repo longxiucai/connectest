@@ -33,10 +33,10 @@
 GUI 模式基于 Fyne 框架，编译时需要 C 工具链和 X11 开发库：
 
 ```bash
-sudo apt-get install -y gcc \
-  libxi-dev libxcursor-dev libxinerama-dev \
-  libxxf86vm-dev libgl1-mesa-dev libxrandr-dev \
-  libx11-dev libxrender-dev
+sudo apt install -y gcc \
+ libxi-dev libxcursor-dev libxinerama-dev \
+ libxxf86vm-dev libxrandr-dev libx11-dev libxrender-dev \
+ libgl-dev libgl1-mesa-dev
 ```
 
 ### 编译

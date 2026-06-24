@@ -23,8 +23,7 @@ all: build-all build-cli-all
 # ====================== 依赖安装 ======================
 # 系统依赖
 install-deps:
-	sudo apt install -y gcc libxcursor-dev libxinerama-dev \
-		libxxf86vm-dev libgl-dev libx11-dev libxrender-dev libxrandr-dev libgl1-mesa-dev
+	sudo apt install -y gcc libxi-dev libxcursor-dev libxinerama-dev libxxf86vm-dev libxrandr-dev libx11-dev libxrender-dev libgl-dev libgl1-mesa-dev
 
 # Go模块依赖整理
 deps: install-deps
