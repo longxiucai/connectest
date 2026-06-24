@@ -25,7 +25,7 @@ all: build-all build-cli-all
 install-deps:
 	sudo apt install -y gcc gcc-aarch64-linux-gnu \
 		libxi-dev libxcursor-dev libxinerama-dev \
-		libxxf86vm-dev libgl-dev libx11-dev libxrender-dev
+		libxxf86vm-dev libgl-dev libx11-dev libxrender-dev libxrandr-dev libgl1-mesa-dev
 
 # Go模块依赖整理
 deps: install-deps
