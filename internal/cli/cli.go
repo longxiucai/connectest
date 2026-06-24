@@ -19,6 +19,8 @@ import (
 
 var registry = connector.NewRegistry()
 
+var Version = "dev"
+
 // NewRootCmd 创建根命令
 func NewRootCmd() *cobra.Command {
 	rootCmd := &cobra.Command{
@@ -31,8 +33,19 @@ func NewRootCmd() *cobra.Command {
 
 	rootCmd.AddCommand(newCLICmd())
 	rootCmd.AddCommand(newGUICmd())
+	rootCmd.AddCommand(newVersionCmd())
 
 	return rootCmd
+}
+
+func newVersionCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "version",
+		Short: "显示版本信息",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Printf("Connectest %s\n", Version)
+		},
+	}
 }
 
 func newCLICmd() *cobra.Command {

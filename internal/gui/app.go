@@ -12,6 +12,8 @@ import (
 	"github.com/longxiucai/connectest/internal/connector"
 )
 
+var Version = "dev"
+
 // App GUI 应用
 type App struct {
 	fyneApp      fyne.App
@@ -71,9 +73,13 @@ func (a *App) Run() {
 	// 左侧服务列表
 	serviceList := a.createServiceList(serviceContent)
 
+	versionLabel := widget.NewLabel("Connectest " + Version)
+	versionLabel.TextStyle = fyne.TextStyle{Italic: true}
+
 	leftPanel := container.NewBorder(
 		widget.NewLabel("  服务列表"),
-		nil, nil, nil,
+		container.NewPadded(versionLabel),
+		nil, nil,
 		serviceList,
 	)
 
