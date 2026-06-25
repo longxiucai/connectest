@@ -2,6 +2,14 @@
 
 多服务连接测试工具，支持 CLI 和 GUI 两种模式。快速验证数据库、消息队列、对象存储、分布式协调等服务的连通性和功能。
 
+* GUI界面：
+![app](docs/img/app.png)
+* CLI：
+![](docs/img/cli-rabbitmq.png)
+* CLI操作rabbitmq创建队列
+![](docs/img/cli-mq-queue.png)
+
+
 ## 功能特性
 
 - 支持 9 种常见后端服务的连接测试
