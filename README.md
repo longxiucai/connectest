@@ -36,8 +36,35 @@
 
 ## 安装
 
-### 系统依赖（Linux，Fyne GUI 需要）
+### 下载安装
 
+从 [Releases](https://github.com/longxiucai/connectest/releases) 页面下载对应平台的二进制文件。
+
+#### 纯 CLI 版本（全平台）
+
+| 平台 | 文件名 |
+|------|--------|
+| Linux amd64 | `connectest-cli-<version>-linux-amd64.tar.gz` |
+| Linux arm64 | `connectest-cli-<version>-linux-arm64.tar.gz` |
+| macOS amd64 | `connectest-cli-<version>-darwin-amd64.tar.gz` |
+| macOS arm64 | `connectest-cli-<version>-darwin-arm64.tar.gz` |
+| Windows amd64 | `connectest-cli-<version>-windows-amd64.zip` |
+| Windows arm64 | `connectest-cli-<version>-windows-arm64.zip` |
+
+#### GUI + CLI 版本（仅支持 Linux）
+
+| 平台 | 文件名 |
+|------|--------|
+| Linux arm64 | `connectest-<version>-linux-arm64.tar.gz` |
+| Linux amd64 | `connectest-<version>-linux-amd64.tar.gz` |
+
+下载后解压并运行
+
+
+
+### 编译
+
+#### 系统依赖（Linux，Fyne GUI 需要）
 GUI 模式基于 Fyne 框架，编译时需要 C 工具链和 X11 开发库：
 
 ```bash
@@ -46,16 +73,11 @@ sudo apt install -y gcc \
  libxxf86vm-dev libxrandr-dev libx11-dev libxrender-dev \
  libgl-dev libgl1-mesa-dev
 ```
-
-### 编译
-
+编译：
 ```bash
 # 完整编译（GUI + CLI）
 go mod tidy
 go build -o bin/connectest ./cmd/connectest
-
-# 或使用 Makefile
-make build
 ```
 
 ### CLI 独立编译（无需 CGO）
