@@ -21,9 +21,17 @@ $(BUILD_DIR):
 all: build-all build-cli-all
 
 # ====================== 依赖安装 ======================
-# 系统依赖
+# 系统依赖（仅安装缺失的包）
+DEPS := gcc libxi-dev libxcursor-dev libxinerama-dev libxxf86vm-dev libxrandr-dev libx11-dev libxrender-dev libgl-dev libgl1-mesa-dev
+MISSING_DEPS := $(shell for pkg in $(DEPS); do dpkg -l $$pkg 2>/dev/null | grep -q '^ii' || echo $$pkg; done)
+
 install-deps:
-	sudo apt install -y gcc libxi-dev libxcursor-dev libxinerama-dev libxxf86vm-dev libxrandr-dev libx11-dev libxrender-dev libgl-dev libgl1-mesa-dev
+	@if [ -n "$(MISSING_DEPS)" ]; then \
+		echo "安装缺失的依赖: $(MISSING_DEPS)"; \
+		sudo apt install -y $(MISSING_DEPS); \
+	else \
+		echo "所有依赖已安装，跳过"; \
+	fi
 
 # Go模块依赖整理
 deps: install-deps
