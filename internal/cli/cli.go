@@ -394,7 +394,7 @@ func listServiceActions(meta config.ServiceMeta) error {
 	fmt.Println(strings.Repeat("═", 60))
 
 	for _, act := range actions {
-		fmt.Printf("\n  🔹 %s\n", act.Label)
+		fmt.Printf("\n  %s\n", act.Label)
 		fmt.Printf("     -a %s\n", act.Name)
 		if act.Description != "" {
 			fmt.Printf("     %s\n", act.Description)
