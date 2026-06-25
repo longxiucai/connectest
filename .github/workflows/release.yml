@@ -36,11 +36,33 @@ jobs:
   release:
     needs: [linux-amd64, linux-arm64]
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
 
-      - name: Release
+      - name: Show Artifacts
+        run: find artifacts -type f
+
+      - name: Package
+        run: |
+          mkdir release
+
+          find artifacts -type f | while read file; do
+            name=$(basename "$file")
+
+            if [[ "$name" == *.exe ]]; then
+              base="${name%.exe}"
+              zip -j "release/${base}.zip" "$file"
+            else
+              tar -czf "release/${name}.tar.gz" \
+                -C "$(dirname "$file")" \
+                "$name"
+            fi
+          done
+      - name: Show Release Files
+        run: ls -lh release
+      - name: Publish Release
         uses: softprops/action-gh-release@v2
         with:
-          files: "**/*"
+          files: release/*
