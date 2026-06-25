@@ -158,6 +158,19 @@ func runServiceCmd(cmd *cobra.Command, meta config.ServiceMeta) error {
 		cfg.Extra["mgmt_port"] = fmt.Sprintf("%d", mgmtPort)
 	}
 
+	if action != "" {
+		for _, act := range c.SupportedActions() {
+			if act.Name == action {
+				for _, p := range act.Params {
+					if _, ok := cfg.Extra[p.Name]; !ok && p.Default != "" {
+						cfg.Extra[p.Name] = p.Default
+					}
+				}
+				break
+			}
+		}
+	}
+
 	// 全局上下文：Ctrl+C 可中断连接测试和执行操作
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
