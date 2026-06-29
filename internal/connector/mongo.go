@@ -18,18 +18,31 @@ type MongoDBConnector struct{}
 func (c *MongoDBConnector) Name() string { return "MongoDB" }
 
 func (c *MongoDBConnector) buildURI(cfg config.Config) string {
-	if cfg.User != "" && cfg.Password != "" {
-		return fmt.Sprintf("mongodb://%s:%s@%s:%d",
-			cfg.User, cfg.Password, cfg.Host, cfg.Port)
+	scheme := "mongodb"
+	if cfg.UseTLS {
+		scheme = "mongodb+srv"
 	}
-	return fmt.Sprintf("mongodb://%s:%d", cfg.Host, cfg.Port)
+	if cfg.User != "" && cfg.Password != "" {
+		return fmt.Sprintf("%s://%s:%s@%s:%d",
+			scheme, cfg.User, cfg.Password, cfg.Host, cfg.Port)
+	}
+	return fmt.Sprintf("%s://%s:%d", scheme, cfg.Host, cfg.Port)
+}
+
+func (c *MongoDBConnector) newClientOptions(cfg config.Config) *options.ClientOptions {
+	opts := options.Client().ApplyURI(c.buildURI(cfg))
+	if cfg.UseTLS {
+		tlsCfg := buildTLSConfig(cfg)
+		opts.SetTLSConfig(tlsCfg)
+	}
+	return opts
 }
 
 func (c *MongoDBConnector) TestConnection(ctx context.Context, cfg config.Config) (*config.Result, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := mongo.Connect(options.Client().ApplyURI(c.buildURI(cfg)))
+	client, err := mongo.Connect(c.newClientOptions(cfg))
 	if err != nil {
 		return &config.Result{Success: false, Message: fmt.Sprintf("连接失败: %v", err)}, nil
 	}
@@ -186,7 +199,7 @@ func (c *MongoDBConnector) ExecuteAction(ctx context.Context, cfg config.Config,
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	client, err := mongo.Connect(options.Client().ApplyURI(c.buildURI(cfg)))
+	client, err := mongo.Connect(c.newClientOptions(cfg))
 	if err != nil {
 		return nil, fmt.Errorf("连接失败: %w", err)
 	}

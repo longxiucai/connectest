@@ -11,6 +11,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/longxiucai/connectest/internal/config"
@@ -20,21 +21,24 @@ import (
 
 // formWidgets 存储表单控件引用
 type formWidgets struct {
-	host          *widget.Entry
-	port          *widget.Entry
-	user          *widget.Entry
-	password      *widget.Entry
-	database      *widget.Entry
-	mgmtPort      *widget.Entry // 管理端口（如 RabbitMQ Management API）
-	caCert        *widget.Entry // CA 证书路径
-	cert          *widget.Entry // 客户端证书路径
-	key           *widget.Entry // 客户端私钥路径
-	useTLS        *widget.Check
-	window        fyne.Window
-	resultLabel   *widget.Label
-	resultScroll  *container.Scroll
-	serverInfoBox *fyne.Container // 固定的服务器信息面板
-	progressLabel *widget.Label   // 并发执行时的实时进度显示
+	host             *widget.Entry
+	port             *widget.Entry
+	user             *widget.Entry
+	password         *widget.Entry
+	database         *widget.Entry
+	mgmtPort         *widget.Entry   // 管理端口（如 RabbitMQ Management API）
+	sslMode          *widget.Select  // PostgreSQL SSL 模式选择
+	sslModeContainer *fyne.Container // SSL 模式容器（TLS 勾选后显示）
+	caCert           *widget.Entry   // CA 证书路径
+	cert             *widget.Entry   // 客户端证书路径
+	key              *widget.Entry   // 客户端私钥路径
+	useTLS           *widget.Check
+	certContainer    *fyne.Container // 证书字段容器（TLS 勾选后显示）
+	window           fyne.Window
+	resultLabel      *widget.Label
+	resultScroll     *container.Scroll
+	serverInfoBox    *fyne.Container    // 固定的服务器信息面板
+	progressLabel    *widget.Label      // 并发执行时的实时进度显示
 	cancelFunc       context.CancelFunc // 取消正在执行的操作
 	testCancelFunc   context.CancelFunc // 取消正在执行的测试连接
 	running          atomic.Bool        // 是否正在执行
@@ -71,6 +75,17 @@ func newFormWidgets(meta config.ServiceMeta, w fyne.Window, c connector.Connecto
 		defaultMgmtPort := meta.DefaultPort + 10000
 		fw.mgmtPort.SetPlaceHolder(fmt.Sprintf("%d (默认)", defaultMgmtPort))
 		fw.mgmtPort.SetText(fmt.Sprintf("%d", defaultMgmtPort))
+	}
+	if meta.Type == config.ServicePostgreSQL {
+		fw.sslMode = widget.NewSelect([]string{
+			"disable",
+			"allow",
+			"prefer",
+			"require",
+			"verify-ca",
+			"verify-full",
+		}, nil)
+		fw.sslMode.SetSelected("disable")
 	}
 	if meta.HasCerts {
 		fw.caCert = widget.NewEntry()
@@ -191,6 +206,9 @@ func (fw *formWidgets) toConfig(meta config.ServiceMeta) config.Config {
 			cfg.Extra["mgmt_port"] = mp
 		}
 	}
+	if fw.sslMode != nil {
+		cfg.SslMode = fw.sslMode.Selected
+	}
 	if fw.caCert != nil {
 		cfg.CACert = strings.TrimSpace(fw.caCert.Text)
 	}
@@ -199,10 +217,6 @@ func (fw *formWidgets) toConfig(meta config.ServiceMeta) config.Config {
 	}
 	if fw.key != nil {
 		cfg.Key = strings.TrimSpace(fw.key.Text)
-	}
-	// 如果填写了证书路径，自动启用 TLS
-	if cfg.CACert != "" || cfg.Cert != "" || cfg.Key != "" {
-		cfg.UseTLS = true
 	}
 	return cfg
 }
@@ -229,23 +243,67 @@ func (fw *formWidgets) buildForm() fyne.CanvasObject {
 		grid.Add(widget.NewLabel("管理端口:"))
 		grid.Add(fw.mgmtPort)
 	}
+	// SSL 模式（仅 PostgreSQL，TLS 勾选后显示）
+	fw.sslModeContainer = container.NewVBox()
+	if fw.sslMode != nil {
+		fw.sslModeContainer.Add(container.NewGridWithColumns(2, widget.NewLabel("SSL 模式:"), fw.sslMode))
+	}
+	fw.sslModeContainer.Hide()
+
+	// 证书字段容器（TLS 勾选后显示）
+	fw.certContainer = container.NewVBox()
 	if fw.caCert != nil {
-		grid.Add(widget.NewLabel("CA 证书:"))
-		grid.Add(fw.caCert)
+		caCertRow := container.NewBorder(nil, nil, nil, fw.makeFilePickerButton(fw.caCert), fw.caCert)
+		fw.certContainer.Add(container.NewGridWithColumns(2, widget.NewLabel("CA 证书:"), caCertRow))
 	}
 	if fw.cert != nil {
-		grid.Add(widget.NewLabel("客户端证书:"))
-		grid.Add(fw.cert)
+		certRow := container.NewBorder(nil, nil, nil, fw.makeFilePickerButton(fw.cert), fw.cert)
+		fw.certContainer.Add(container.NewGridWithColumns(2, widget.NewLabel("客户端证书:"), certRow))
 	}
 	if fw.key != nil {
-		grid.Add(widget.NewLabel("客户端私钥:"))
-		grid.Add(fw.key)
+		keyRow := container.NewBorder(nil, nil, nil, fw.makeFilePickerButton(fw.key), fw.key)
+		fw.certContainer.Add(container.NewGridWithColumns(2, widget.NewLabel("客户端私钥:"), keyRow))
 	}
+	fw.certContainer.Hide()
+
+	// TLS 复选框：切换证书字段和 SSL 模式显示
+	fw.useTLS = widget.NewCheck("启用 TLS/SSL", func(checked bool) {
+		if checked {
+			if fw.sslModeContainer != nil {
+				fw.sslModeContainer.Show()
+			}
+			fw.certContainer.Show()
+		} else {
+			if fw.sslModeContainer != nil {
+				fw.sslModeContainer.Hide()
+			}
+			fw.certContainer.Hide()
+		}
+		if fw.sslModeContainer != nil {
+			fw.sslModeContainer.Refresh()
+		}
+		fw.certContainer.Refresh()
+	})
+
 	grid.Add(widget.NewLabel(""))
 	grid.Add(fw.useTLS)
 
-	// 表单 + 服务器信息面板
-	return container.NewVBox(grid, fw.serverInfoBox)
+	// 表单 + SSL 模式容器 + 证书容器 + 服务器信息面板
+	return container.NewVBox(grid, fw.sslModeContainer, fw.certContainer, fw.serverInfoBox)
+}
+
+// makeFilePickerButton 创建一个文件选择按钮，点击后弹出文件对话框
+func (fw *formWidgets) makeFilePickerButton(entry *widget.Entry) *widget.Button {
+	return widget.NewButton("📁", func() {
+		dialog.ShowFileOpen(func(reader fyne.URIReadCloser, err error) {
+			if err != nil || reader == nil {
+				return
+			}
+			defer reader.Close()
+			path := reader.URI().Path()
+			entry.SetText(path)
+		}, fw.window)
+	})
 }
 
 func (fw *formWidgets) buildActions(meta config.ServiceMeta, c connector.Connector) fyne.CanvasObject {
@@ -806,4 +864,3 @@ func (fw *formWidgets) buildActions(meta config.ServiceMeta, c connector.Connect
 
 	return container.NewVBox(testBtn, funcSection)
 }
-

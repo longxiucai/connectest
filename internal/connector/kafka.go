@@ -22,7 +22,14 @@ func (c *KafkaConnector) TestConnection(ctx context.Context, cfg config.Config) 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	conn, err := kafka.DialContext(ctx, "tcp", c.brokerAddr(cfg))
+	dialer := &kafka.Dialer{
+		Timeout: 10 * time.Second,
+	}
+	if cfg.UseTLS {
+		dialer.TLS = buildTLSConfig(cfg)
+	}
+
+	conn, err := dialer.DialContext(ctx, "tcp", c.brokerAddr(cfg))
 	if err != nil {
 		return &config.Result{Success: false, Message: fmt.Sprintf("连接失败: %v", err)}, nil
 	}
@@ -129,6 +136,13 @@ func (c *KafkaConnector) ExecuteAction(ctx context.Context, cfg config.Config, a
 
 	broker := c.brokerAddr(cfg)
 
+	dialer := &kafka.Dialer{
+		Timeout: 10 * time.Second,
+	}
+	if cfg.UseTLS {
+		dialer.TLS = buildTLSConfig(cfg)
+	}
+
 	switch action {
 	case "create_topic":
 		topicName := params["topic"]
@@ -140,7 +154,7 @@ func (c *KafkaConnector) ExecuteAction(ctx context.Context, cfg config.Config, a
 			fmt.Sscanf(p, "%d", &partitions)
 		}
 
-		conn, err := kafka.DialContext(ctx, "tcp", broker)
+		conn, err := dialer.DialContext(ctx, "tcp", broker)
 		if err != nil {
 			return nil, fmt.Errorf("连接失败: %w", err)
 		}
@@ -151,7 +165,7 @@ func (c *KafkaConnector) ExecuteAction(ctx context.Context, cfg config.Config, a
 			return nil, fmt.Errorf("获取 Controller 失败: %w", err)
 		}
 
-		controllerConn, err := kafka.DialContext(ctx, "tcp", fmt.Sprintf("%s:%d", controller.Host, controller.Port))
+		controllerConn, err := dialer.DialContext(ctx, "tcp", fmt.Sprintf("%s:%d", controller.Host, controller.Port))
 		if err != nil {
 			return nil, fmt.Errorf("连接 Controller 失败: %w", err)
 		}
@@ -178,7 +192,7 @@ func (c *KafkaConnector) ExecuteAction(ctx context.Context, cfg config.Config, a
 		}, nil
 
 	case "list_topics":
-		conn, err := kafka.DialContext(ctx, "tcp", broker)
+		conn, err := dialer.DialContext(ctx, "tcp", broker)
 		if err != nil {
 			return nil, fmt.Errorf("连接失败: %w", err)
 		}
@@ -231,10 +245,15 @@ func (c *KafkaConnector) ExecuteAction(ctx context.Context, cfg config.Config, a
 				if message == "" {
 					message = "hello from connectest"
 				}
+				transport := &kafka.Transport{}
+				if cfg.UseTLS {
+					transport.TLS = buildTLSConfig(cfg)
+				}
 				w := &kafka.Writer{
-					Addr:     kafka.TCP(broker),
-					Topic:    produceTopic,
-					Balancer: &kafka.LeastBytes{},
+					Addr:      kafka.TCP(broker),
+					Topic:     produceTopic,
+					Balancer:  &kafka.LeastBytes{},
+					Transport: transport,
 				}
 				msg := kafka.Message{Value: []byte(message)}
 				if key != "" {
@@ -262,6 +281,7 @@ func (c *KafkaConnector) ExecuteAction(ctx context.Context, cfg config.Config, a
 					MaxBytes:       10e6,
 					CommitInterval: time.Second,
 					StartOffset:    kafka.LastOffset,
+					Dialer:         dialer,
 				})
 				readCtx, readCancel := context.WithTimeout(ctx, 10*time.Second)
 				msg, err := r.ReadMessage(readCtx)

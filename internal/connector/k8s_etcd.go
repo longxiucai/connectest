@@ -3,7 +3,6 @@ package connector
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -64,36 +63,7 @@ func (c *EtcdK8SConnector) newClient(cfg config.Config) (*clientv3.Client, error
 	return client, nil
 }
 
-func buildTLSConfig(cfg config.Config) *tls.Config {
-	if !cfg.UseTLS {
-		return nil
-	}
-	tlsCfg := &tls.Config{
-		InsecureSkipVerify: true,
-	}
-	if cfg.CACert != "" {
-		caCert, err := resolvePEM(cfg.CACert)
-		if err == nil {
-			caCertPool := x509.NewCertPool()
-			if caCertPool.AppendCertsFromPEM(caCert) {
-				tlsCfg.RootCAs = caCertPool
-				tlsCfg.InsecureSkipVerify = false
-			}
-		}
-	}
-	if cfg.Cert != "" && cfg.Key != "" {
-		certPEM, err := resolvePEM(cfg.Cert)
-		if err == nil {
-			keyPEM, err := resolvePEM(cfg.Key)
-			if err == nil {
-				if cert, err := tls.X509KeyPair(certPEM, keyPEM); err == nil {
-					tlsCfg.Certificates = []tls.Certificate{cert}
-				}
-			}
-		}
-	}
-	return tlsCfg
-}
+
 
 func (c *EtcdK8SConnector) newClientToEndpoint(endpoint string, tlsCfg *tls.Config) (*clientv3.Client, error) {
 	client, err := clientv3.New(clientv3.Config{

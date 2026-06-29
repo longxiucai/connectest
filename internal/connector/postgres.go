@@ -2,26 +2,98 @@ package connector
 
 import (
 	"context"
+	"crypto/md5"
 	"database/sql"
 	"fmt"
+	"os"
 	"strings"
+	"sync"
 	"time"
 
-	"github.com/longxiucai/connectest/internal/config"
 	_ "github.com/lib/pq"
+	"github.com/longxiucai/connectest/internal/config"
 )
 
 type PostgreSQLConnector struct{}
 
+var (
+	certCache sync.Map // md5(content) -> path
+)
+
 func (c *PostgreSQLConnector) Name() string { return "PostgreSQL" }
 
-func (c *PostgreSQLConnector) TestConnection(ctx context.Context, cfg config.Config) (*config.Result, error) {
-	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s sslmode=disable",
-		cfg.Host, cfg.Port, cfg.User, cfg.Password)
+func (c *PostgreSQLConnector) buildDSN(cfg config.Config) string {
+	var sslmode string
+	if cfg.SslMode != "" {
+		sslmode = cfg.SslMode
+	} else if cfg.UseTLS {
+		if cfg.CACert != "" {
+			sslmode = "verify-full"
+		} else {
+			sslmode = "require"
+		}
+	} else {
+		sslmode = "disable"
+	}
+	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s sslmode=%s",
+		cfg.Host, cfg.Port, cfg.User, cfg.Password, sslmode)
 	if cfg.Database != "" {
 		dsn += fmt.Sprintf(" dbname=%s", cfg.Database)
 	}
+	if cfg.CACert != "" {
+		if path, err := resolveCertPath(cfg.CACert); err == nil {
+			dsn += fmt.Sprintf(" sslrootcert=%s", path)
+		}
+	}
+	if cfg.Cert != "" {
+		if path, err := resolveCertPath(cfg.Cert); err == nil {
+			dsn += fmt.Sprintf(" sslcert=%s", path)
+		}
+	}
+	if cfg.Key != "" {
+		if path, err := resolveCertPath(cfg.Key); err == nil {
+			dsn += fmt.Sprintf(" sslkey=%s", path)
+		}
+	}
+	return dsn
+}
 
+func resolveCertPath(input string) (string, error) {
+	trimmed := strings.TrimSpace(input)
+	if strings.HasPrefix(trimmed, "-----BEGIN") {
+		hash := fmt.Sprintf("%x", md5.Sum([]byte(trimmed)))
+		if cached, ok := certCache.Load(hash); ok {
+			return cached.(string), nil
+		}
+		path, err := createTempPEMFile(trimmed)
+		if err != nil {
+			return "", err
+		}
+		certCache.Store(hash, path)
+		return path, nil
+	}
+	return trimmed, nil
+}
+
+func createTempPEMFile(content string) (string, error) {
+	normalized := normalizePEM(content)
+	tmpFile, err := os.CreateTemp("", "connectest-*.pem")
+	if err != nil {
+		return "", err
+	}
+	tmpPath := tmpFile.Name()
+	if _, err := tmpFile.WriteString(normalized); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpPath)
+		return "", err
+	}
+	tmpFile.Close()
+	os.Chmod(tmpPath, 0600)
+	return tmpPath, nil
+}
+
+func (c *PostgreSQLConnector) TestConnection(ctx context.Context, cfg config.Config) (*config.Result, error) {
+	dsn := c.buildDSN(cfg)
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
 		return &config.Result{Success: false, Message: fmt.Sprintf("连接失败: %v", err)}, nil
@@ -141,11 +213,7 @@ func (c *PostgreSQLConnector) SupportedActions() []config.Action {
 }
 
 func (c *PostgreSQLConnector) ExecuteAction(ctx context.Context, cfg config.Config, action string, params map[string]string) (*config.Result, error) {
-	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s sslmode=disable",
-		cfg.Host, cfg.Port, cfg.User, cfg.Password)
-	if cfg.Database != "" {
-		dsn += fmt.Sprintf(" dbname=%s", cfg.Database)
-	}
+	dsn := c.buildDSN(cfg)
 
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {

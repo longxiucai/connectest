@@ -91,12 +91,15 @@ func newServiceCmd(meta config.ServiceMeta) *cobra.Command {
 		defaultMgmt := meta.DefaultPort + 10000
 		cmd.Flags().Int("mgmt-port", defaultMgmt, meta.MgmtPortLabel+"(Management API)")
 	}
+	if meta.Type == config.ServicePostgreSQL {
+		cmd.Flags().String("sslmode", "disable", "PostgreSQL SSL 模式 (disable/allow/prefer/require/verify-ca/verify-full)")
+	}
 	if meta.HasCerts {
 		cmd.Flags().String("ca-cert", "", "CA 证书 (文件路径或 PEM 内容)")
 		cmd.Flags().String("cert", "", "客户端证书 (文件路径或 PEM 内容)")
 		cmd.Flags().String("key", "", "客户端私钥 (文件路径或 PEM 内容)")
 	}
-	cmd.Flags().Bool("tls", false, "启用 TLS/SSL")
+	cmd.Flags().Bool("tls", false, "启用 TLS/SSL (通过显示 --tls 参数启用, 或指定 --ca-cert/--cert/--key 自动启用)")
 
 	// 操作参数
 	cmd.Flags().StringP("action", "a", "", "执行操作 (留空则测试连接, 使用 --list-actions 查看可用操作)")
@@ -127,11 +130,13 @@ func runServiceCmd(cmd *cobra.Command, meta config.ServiceMeta) error {
 	database, _ := cmd.Flags().GetString("database")
 	useTLS, _ := cmd.Flags().GetBool("tls")
 	mgmtPort, _ := cmd.Flags().GetInt("mgmt-port")
+	sslmode, _ := cmd.Flags().GetString("sslmode")
 	var caCert, certPath, keyPath string
 	if meta.HasCerts {
 		caCert, _ = cmd.Flags().GetString("ca-cert")
 		certPath, _ = cmd.Flags().GetString("cert")
 		keyPath, _ = cmd.Flags().GetString("key")
+		// cli下如果指定了任意一个证书参数，则启用 TLS
 		if caCert != "" || certPath != "" || keyPath != "" {
 			useTLS = true
 		}
@@ -149,6 +154,7 @@ func runServiceCmd(cmd *cobra.Command, meta config.ServiceMeta) error {
 		Password: password,
 		Database: database,
 		UseTLS:   useTLS,
+		SslMode:  sslmode,
 		CACert:   caCert,
 		Cert:     certPath,
 		Key:      keyPath,

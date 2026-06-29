@@ -43,8 +43,12 @@ type RabbitMQConnector struct{}
 func (c *RabbitMQConnector) Name() string { return "RabbitMQ" }
 
 func (c *RabbitMQConnector) buildURL(cfg config.Config) string {
-	return fmt.Sprintf("amqp://%s:%s@%s:%d/",
-		cfg.User, cfg.Password, cfg.Host, cfg.Port)
+	scheme := "amqp"
+	if cfg.UseTLS {
+		scheme = "amqps"
+	}
+	return fmt.Sprintf("%s://%s:%s@%s:%d/",
+		scheme, cfg.User, cfg.Password, cfg.Host, cfg.Port)
 }
 
 func (c *RabbitMQConnector) TestConnection(ctx context.Context, cfg config.Config) (*config.Result, error) {
@@ -57,10 +61,14 @@ func (c *RabbitMQConnector) TestConnection(ctx context.Context, cfg config.Confi
 	}
 	ch := make(chan dialResult, 1)
 	go func() {
-		conn, err := amqp.DialConfig(c.buildURL(cfg), amqp.Config{
+		amqpCfg := amqp.Config{
 			Heartbeat: 10 * time.Second,
 			Locale:    "en_US",
-		})
+		}
+		if cfg.UseTLS {
+			amqpCfg.TLSClientConfig = buildTLSConfig(cfg)
+		}
+		conn, err := amqp.DialConfig(c.buildURL(cfg), amqpCfg)
 		ch <- dialResult{conn, err}
 	}()
 
@@ -237,10 +245,14 @@ func (c *RabbitMQConnector) ExecuteAction(ctx context.Context, cfg config.Config
 	}
 	dialCh := make(chan dialResult, 1)
 	go func() {
-		conn, err := amqp.DialConfig(c.buildURL(cfg), amqp.Config{
+		amqpCfg := amqp.Config{
 			Heartbeat: 10 * time.Second,
 			Locale:    "en_US",
-		})
+		}
+		if cfg.UseTLS {
+			amqpCfg.TLSClientConfig = buildTLSConfig(cfg)
+		}
+		conn, err := amqp.DialConfig(c.buildURL(cfg), amqpCfg)
 		dialCh <- dialResult{conn, err}
 	}()
 

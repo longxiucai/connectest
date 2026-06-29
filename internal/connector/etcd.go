@@ -11,8 +11,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -95,85 +93,6 @@ func newEtcdClient(cfg config.Config) (*etcdClient, error) {
 			Transport: transport,
 		},
 	}, nil
-}
-
-// resolvePEM 自动判断输入是 PEM 内容还是文件路径，返回规范化后的 PEM 字节。
-// PEM 内容会自动修复换行问题（空格/字面量 \n 等还原为标准换行符）。
-func resolvePEM(input string) ([]byte, error) {
-	trimmed := strings.TrimSpace(input)
-	var raw []byte
-	if strings.HasPrefix(trimmed, "-----BEGIN") {
-		raw = []byte(trimmed)
-	} else {
-		data, err := os.ReadFile(trimmed)
-		if err != nil {
-			return nil, fmt.Errorf("读取文件 %s 失败: %w", trimmed, err)
-		}
-		raw = data
-	}
-	// 无论来源都做 normalize（文件也可能有 Windows 换行等问题）
-	return []byte(normalizePEM(string(raw))), nil
-}
-
-// normalizePEM 修复粘贴导致的换行丢失问题。
-// 处理场景：
-//   - 换行被完全删除: "-----BEGIN CERTIFICATE-----MIIC4z...-----END CERTIFICATE-----"
-//   - 空格替代换行:   "-----BEGIN CERTIFICATE----- MIIC4z... -----END CERTIFICATE-----"
-//   - 字面量 \n:      "-----BEGIN CERTIFICATE-----\nMIIC4z...\n-----END CERTIFICATE-----"
-//   - 混合情况
-func normalizePEM(s string) string {
-	// 0. 清理粘贴时带入的不可见 Unicode 字符（BOM、零宽空格、不间断空格等）
-	s = strings.Map(func(r rune) rune {
-		switch r {
-		case 0xFEFF, 0x200B, 0x200C, 0x200D, 0x00A0:
-			return -1
-		}
-		return r
-	}, s)
-
-	// 1. 还原字面量 \n → 真实换行
-	s = strings.ReplaceAll(s, `\r\n`, "\n")
-	s = strings.ReplaceAll(s, `\n`, "\n")
-	s = strings.ReplaceAll(s, "\r", "")
-
-	// 如果已经有正确换行（BEGIN 行和 END 行各占一行），直接返回
-	if strings.Count(s, "\n") >= 2 {
-		return s
-	}
-
-	// 2. 用正则在 PEM 标记边界处插入换行
-	//    覆盖：-----BEGIN XXX----- 后面无论紧跟空格还是 base64 都断开
-	beginRe := regexp.MustCompile(`(-----BEGIN\s+[A-Z0-9 ]+?-----)\s*`)
-	endRe := regexp.MustCompile(`\s*(-----END\s+[A-Z0-9 ]+?-----)`)
-
-	s = beginRe.ReplaceAllString(s, "$1\n")
-	s = endRe.ReplaceAllString(s, "\n$1\n")
-
-	// 3. 把 base64 正文按 76 字符折行（PEM 标准要求）
-	var result strings.Builder
-	for _, line := range strings.Split(s, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
-			continue
-		}
-		if strings.HasPrefix(trimmed, "-----") {
-			result.WriteString(trimmed)
-			result.WriteByte('\n')
-		} else {
-			// base64 行：去掉所有空格后按 76 字符折行
-			clean := strings.ReplaceAll(trimmed, " ", "")
-			for len(clean) > 0 {
-				end := 76
-				if end > len(clean) {
-					end = len(clean)
-				}
-				result.WriteString(clean[:end])
-				result.WriteByte('\n')
-				clean = clean[end:]
-			}
-		}
-	}
-	return result.String()
 }
 
 // doRequest 发送 HTTP 请求到 etcd gRPC-Gateway REST API

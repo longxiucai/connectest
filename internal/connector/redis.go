@@ -26,6 +26,9 @@ func (c *RedisConnector) newClient(cfg config.Config) *redis.Client {
 	if cfg.Password != "" {
 		opts.Password = cfg.Password
 	}
+	if cfg.UseTLS {
+		opts.TLSConfig = buildTLSConfig(cfg)
+	}
 	return redis.NewClient(opts)
 }
 

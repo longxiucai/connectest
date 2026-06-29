@@ -2,14 +2,15 @@ package connector
 
 import (
 	"context"
+	"crypto/tls"
 	"database/sql"
 	"fmt"
 	"strings"
 	"time"
 
+	mysql "github.com/go-sql-driver/mysql"
 	"github.com/longxiucai/connectest/internal/config"
 	"github.com/longxiucai/connectest/internal/logger"
-	_ "github.com/go-sql-driver/mysql"
 )
 
 type MySQLConnector struct{}
@@ -18,14 +19,32 @@ var mysqlLog = logger.NewModule("MySQL")
 
 func (c *MySQLConnector) Name() string { return "MySQL" }
 
-func (c *MySQLConnector) TestConnection(ctx context.Context, cfg config.Config) (*config.Result, error) {
-	mysqlLog.Debug("连接 %s:%d, user=%s, db=%s", cfg.Host, cfg.Port, cfg.User, cfg.Database)
+func (c *MySQLConnector) buildDSN(cfg config.Config) string {
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/",
 		cfg.User, cfg.Password, cfg.Host, cfg.Port)
 	if cfg.Database != "" {
 		dsn = fmt.Sprintf("%s:%s@tcp(%s:%d)/%s",
 			cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Database)
 	}
+	if cfg.UseTLS {
+		tlsCfg := buildTLSConfig(cfg)
+		tlsName := "connectest-mysql-custom"
+		mysqlRegisterTLSConfig(tlsName, tlsCfg)
+		dsn += "?tls=" + tlsName
+	}
+	return dsn
+}
+
+func mysqlRegisterTLSConfig(name string, cfg *tls.Config) {
+	if cfg == nil {
+		return
+	}
+	_ = mysql.RegisterTLSConfig(name, cfg)
+}
+
+func (c *MySQLConnector) TestConnection(ctx context.Context, cfg config.Config) (*config.Result, error) {
+	mysqlLog.Debug("连接 %s:%d, user=%s, db=%s", cfg.Host, cfg.Port, cfg.User, cfg.Database)
+	dsn := c.buildDSN(cfg)
 
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
@@ -49,12 +68,12 @@ func (c *MySQLConnector) TestConnection(ctx context.Context, cfg config.Config) 
 
 	// 获取基本状态信息
 	variables := map[string]string{
-		"uptime":             "运行时间",
-		"max_connections":    "最大连接数",
-		"datadir":            "数据目录",
+		"uptime":               "运行时间",
+		"max_connections":      "最大连接数",
+		"datadir":              "数据目录",
 		"character_set_server": "字符集",
-		"collation_server":   "排序规则",
-		"innodb_version":     "InnoDB 版本",
+		"collation_server":     "排序规则",
+		"innodb_version":       "InnoDB 版本",
 	}
 	for varName, label := range variables {
 		var val string
@@ -75,9 +94,9 @@ func (c *MySQLConnector) TestConnection(ctx context.Context, cfg config.Config) 
 	// 获取全局状态
 	statusVars := map[string]string{
 		"Threads_connected": "当前连接数",
-		"Threads_running":  "活跃线程",
-		"Questions":        "总查询数",
-		"Slow_queries":     "慢查询数",
+		"Threads_running":   "活跃线程",
+		"Questions":         "总查询数",
+		"Slow_queries":      "慢查询数",
 	}
 	for varName, label := range statusVars {
 		var val string
@@ -147,12 +166,7 @@ func (c *MySQLConnector) SupportedActions() []config.Action {
 }
 
 func (c *MySQLConnector) ExecuteAction(ctx context.Context, cfg config.Config, action string, params map[string]string) (*config.Result, error) {
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/",
-		cfg.User, cfg.Password, cfg.Host, cfg.Port)
-	if cfg.Database != "" {
-		dsn = fmt.Sprintf("%s:%s@tcp(%s:%d)/%s",
-			cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Database)
-	}
+	dsn := c.buildDSN(cfg)
 
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {

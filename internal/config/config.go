@@ -9,6 +9,8 @@ type Config struct {
 	Database string
 	// TLS/SSL
 	UseTLS bool
+	// PostgreSQL SSL 模式
+	SslMode string // disable, allow, prefer, require, verify-ca, verify-full
 	// mTLS 证书路径（用于 etcd 等需要双向证书认证的服务）
 	CACert string // CA 证书路径
 	Cert   string // 客户端证书路径
@@ -104,13 +106,13 @@ type ServiceMeta struct {
 // AllServices 返回所有支持的服务元数据
 func AllServices() []ServiceMeta {
 	return []ServiceMeta{
-		{ServiceMySQL, "MySQL", 3306, true, true, true, false, "", false},
-		{ServicePostgreSQL, "PostgreSQL", 5432, true, true, true, false, "", false},
-		{ServiceMongoDB, "MongoDB", 27017, true, true, true, false, "", false},
-		{ServiceRedis, "Redis", 6379, false, true, false, false, "", false},
-		{ServiceRabbitMQ, "RabbitMQ", 5672, true, true, true, true, "管理端口", false},
-		{ServiceKafka, "Kafka", 9092, false, false, false, false, "", false},
-		{ServiceMinIO, "MinIO", 9000, true, true, false, false, "", false},
+		{ServiceMySQL, "MySQL", 3306, true, true, true, false, "", true},
+		{ServicePostgreSQL, "PostgreSQL", 5432, true, true, true, false, "", true},
+		{ServiceMongoDB, "MongoDB", 27017, true, true, true, false, "", true},
+		{ServiceRedis, "Redis", 6379, false, true, false, false, "", true},
+		{ServiceRabbitMQ, "RabbitMQ", 5672, true, true, true, true, "管理端口", true},
+		{ServiceKafka, "Kafka", 9092, false, false, false, false, "", true},
+		{ServiceMinIO, "MinIO", 9000, true, true, false, false, "", true},
 		{ServiceEtcdAPI, "etcd-api", 2379, true, true, false, false, "", true},
 		{ServiceEtcdK8S, "etcd-k8s", 2379, false, false, false, false, "", true},
 	}

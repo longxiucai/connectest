@@ -20,10 +20,17 @@ func (c *MinIOConnector) Name() string { return "MinIO" }
 
 func (c *MinIOConnector) newClient(cfg config.Config) (*minio.Client, error) {
 	endpoint := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
-	return minio.New(endpoint, &minio.Options{
+	opts := &minio.Options{
 		Creds:  credentials.NewStaticV4(cfg.User, cfg.Password, ""),
 		Secure: cfg.UseTLS,
-	})
+	}
+	if cfg.UseTLS {
+		tlsCfg := buildTLSConfig(cfg)
+		opts.Transport = &http.Transport{
+			TLSClientConfig: tlsCfg,
+		}
+	}
+	return minio.New(endpoint, opts)
 }
 
 func (c *MinIOConnector) TestConnection(ctx context.Context, cfg config.Config) (*config.Result, error) {
@@ -79,8 +86,14 @@ func (c *MinIOConnector) TestConnection(ctx context.Context, cfg config.Config) 
 	if cfg.UseTLS {
 		scheme = "https"
 	}
+	healthClient := &http.Client{Timeout: 5 * time.Second}
+	if cfg.UseTLS {
+		healthClient.Transport = &http.Transport{
+			TLSClientConfig: buildTLSConfig(cfg),
+		}
+	}
 	healthURL := fmt.Sprintf("%s://%s:%d/minio/health/live", scheme, cfg.Host, cfg.Port)
-	if resp, err := http.Get(healthURL); err == nil {
+	if resp, err := healthClient.Get(healthURL); err == nil {
 		resp.Body.Close()
 		if resp.StatusCode == 200 {
 			si.InfoItems = append(si.InfoItems, config.InfoItem{Label: "健康检查", Value: "✅ 正常"})
@@ -91,7 +104,7 @@ func (c *MinIOConnector) TestConnection(ctx context.Context, cfg config.Config) 
 
 	// MinIO 集群检测（通过 /minio/health/cluster）
 	clusterURL := fmt.Sprintf("%s://%s:%d/minio/health/cluster", scheme, cfg.Host, cfg.Port)
-	if resp, err := http.Get(clusterURL); err == nil {
+	if resp, err := healthClient.Get(clusterURL); err == nil {
 		resp.Body.Close()
 		if resp.StatusCode == 200 {
 			si.Cluster = &config.ClusterInfo{
