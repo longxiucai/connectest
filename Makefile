@@ -40,17 +40,17 @@ deps: install-deps
 # ====================== GUI主程序构建（CGO启用，图形界面） ======================
 # 当前本机编译
 build: deps $(BUILD_DIR)
-	go build -ldflags "-X github.com/longxiucai/connectest/internal/gui.Version=$(VERSION)" -o $(MAIN_BIN) ./cmd/connectest
+	go build -ldflags "-X github.com/longxiucai/connectest/internal/gui.Version=$(VERSION)" -o $(MAIN_BIN) .
 
 # Linux amd64
 build-linux-amd64: deps $(BUILD_DIR)
 	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 \
-	go build -ldflags "-X github.com/longxiucai/connectest/internal/gui.Version=$(VERSION)" -o $(BUILD_DIR)/$(APP_NAME)-$(VERSION)-linux-amd64 ./cmd/connectest
+	go build -ldflags "-X github.com/longxiucai/connectest/internal/gui.Version=$(VERSION)" -o $(BUILD_DIR)/$(APP_NAME)-$(VERSION)-linux-amd64 .
 
 # Linux arm64
 build-linux-arm64: deps $(BUILD_DIR)
 	CGO_ENABLED=1 GOOS=linux GOARCH=arm64 \
-	go build -ldflags "-X github.com/longxiucai/connectest/internal/gui.Version=$(VERSION)" -o $(BUILD_DIR)/$(APP_NAME)-$(VERSION)-linux-arm64 ./cmd/connectest
+	go build -ldflags "-X github.com/longxiucai/connectest/internal/gui.Version=$(VERSION)" -o $(BUILD_DIR)/$(APP_NAME)-$(VERSION)-linux-arm64 .
 
 # GUI全平台打包
 build-all: build-linux-amd64 build-linux-arm64
